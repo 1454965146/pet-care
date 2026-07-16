@@ -1,0 +1,24 @@
+{
+  "pages": [
+    { "path": "pages/index/index", "style": { "navigationBarTitleText": "首页" } },
+    { "path": "pages/care-log/index", "style": { "navigationBarTitleText": "护理日志" } },
+    { "path": "pages/health-report/index", "style": { "navigationBarTitleText": "健康报告" } }
+  ],
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#FF6B6B",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "首页", "iconPath": "static/tab-home.png", "selectedIconPath": "static/tab-home-active.png" },
+      { "pagePath": "pages/care-log/index", "text": "护理", "iconPath": "static/tab-care.png", "selectedIconPath": "static/tab-care-active.png" },
+      { "pagePath": "pages/health-report/index", "text": "报告", "iconPath": "static/tab-report.png", "selectedIconPath": "static/tab-report-active.png" }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "宠物护理助手",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F5F5"
+  }
+}
