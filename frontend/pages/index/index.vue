@@ -13,6 +13,9 @@
         <text class="age-text">{{ petAge }}</text>
       </view>
     </view>
+	
+	
+
 
     <!-- 体重体温趋势图 -->
     <view class="chart-card">
