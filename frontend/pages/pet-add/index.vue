@@ -14,6 +14,8 @@
         <text class="form-label">宠物名称</text>
         <input class="form-input" v-model="formData.name" type="text" placeholder="请输入宠物名称" maxlength="20" />
       </view>
+	  
+	  
 
       <!-- 种类选择 -->
       <view class="form-group">
