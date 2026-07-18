@@ -23,6 +23,8 @@ public class PetController {
     private final StatisticsService statisticsService;
     private final ReminderService reminderService;
 
+
+
     @PostMapping("/health-record")
     public ApiResult<HealthRecordResponse> addHealthRecord(@RequestBody HealthRecordRequest request) {
         HealthRecordResponse response = healthRecordService.addHealthRecord(request);
