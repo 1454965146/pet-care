@@ -3,19 +3,18 @@ server:
 
 spring:
   datasource:
-    url: jdbc:h2:mem:petcare
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+    url: jdbc:mysql://localhost:3306/pet_care?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 123456
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.MySQL8Dialect
     show-sql: true
     hibernate:
       ddl-auto: update
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+  sql:
+    init:
+      mode: never
 
 logging:
   level:

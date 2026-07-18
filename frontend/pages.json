@@ -2,7 +2,8 @@
   "pages": [
     { "path": "pages/index/index", "style": { "navigationBarTitleText": "首页" } },
     { "path": "pages/care-log/index", "style": { "navigationBarTitleText": "护理日志" } },
-    { "path": "pages/health-report/index", "style": { "navigationBarTitleText": "健康报告" } }
+    { "path": "pages/health-report/index", "style": { "navigationBarTitleText": "健康报告" } },
+    { "path": "pages/pet-add/index", "style": { "navigationBarTitleText": "新增宠物" } }
   ],
   "tabBar": {
     "color": "#999999",

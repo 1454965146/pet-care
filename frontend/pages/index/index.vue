@@ -12,6 +12,9 @@
       <view class="pet-age-tag">
         <text class="age-text">{{ petAge }}</text>
       </view>
+      <view class="add-pet-btn" @click="goAddPet">
+        <text class="add-pet-icon">+</text>
+      </view>
     </view>
 	
 	
@@ -125,6 +128,10 @@ const loadData = async () => {
   }
 }
 
+const goAddPet = () => {
+  uni.navigateTo({ url: '/pages/pet-add/index' })
+}
+
 onMounted(() => {
   loadData()
 })
@@ -212,6 +219,21 @@ export default {
 .age-text {
   font-size: 22rpx;
   color: #ffffff;
+}
+.add-pet-btn {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 16rpx;
+}
+.add-pet-icon {
+  font-size: 40rpx;
+  color: #ffffff;
+  font-weight: 300;
 }
 .chart-card, .reminder-card {
   background: #ffffff;
