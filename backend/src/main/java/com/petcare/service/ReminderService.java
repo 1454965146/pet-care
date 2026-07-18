@@ -28,11 +28,13 @@ public class ReminderService {
         List<ReminderResponse> result = new ArrayList<>();
 
         for (Reminder r : unexpired) {
+            if (r.getPet() == null) continue;
             if (seen.add(r.getId())) {
                 result.add(toResponse(r));
             }
         }
         for (Reminder r : todayReminders) {
+            if (r.getPet() == null) continue;
             if (seen.add(r.getId())) {
                 result.add(toResponse(r));
             }

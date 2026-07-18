@@ -1,36 +1,53 @@
 <template>
   <view class="container">
+    <!-- 宠物切换栏 -->
+    <scroll-view scroll-x class="pet-switcher">
+      <view class="switcher-list">
+        <view
+          v-for="pet in petList"
+          :key="pet.id"
+          :class="['pet-chip', currentPetId === pet.id ? 'pet-chip-active' : '']"
+          @click="switchPet(pet)"
+        >
+          <text class="chip-emoji">{{ getSpeciesEmoji(pet.species) }}</text>
+          <text :class="['chip-name', currentPetId === pet.id ? 'chip-name-active' : '']">{{ pet.name }}</text>
+        </view>
+        <view class="pet-chip pet-chip-add" @click="goAddPet">
+          <text class="chip-add-icon">+</text>
+          <text class="chip-add-text">添加</text>
+        </view>
+      </view>
+    </scroll-view>
+
     <!-- 宠物信息卡片 -->
     <view class="pet-card">
       <view class="pet-avatar">
-        <text class="avatar-emoji">🐱</text>
+        <text class="avatar-emoji">{{ getSpeciesEmoji(petInfo.species) }}</text>
       </view>
       <view class="pet-info">
-        <text class="pet-name">{{ petInfo.name || '小橘' }}</text>
-        <text class="pet-breed">{{ petInfo.breed || '橘猫' }}</text>
+        <text class="pet-name">{{ petInfo.name || '未命名' }}</text>
+        <text class="pet-breed">{{ petInfo.breed || '未设置' }}</text>
       </view>
       <view class="pet-age-tag">
         <text class="age-text">{{ petAge }}</text>
       </view>
-      <view class="add-pet-btn" @click="goAddPet">
-        <text class="add-pet-icon">+</text>
-      </view>
     </view>
-	
-	
 
-
-    <!-- 体重体温趋势图 -->
+    <!-- 健康趋势图 -->
     <view class="chart-card">
       <view class="card-header">
         <text class="card-title">健康趋势</text>
         <view class="chart-tabs">
-          <text :class="['tab-item', chartType === 'weight' ? 'tab-active' : '']" @click="chartType = 'weight'">体重</text>
-          <text :class="['tab-item', chartType === 'temperature' ? 'tab-active' : '']" @click="chartType = 'temperature'">体温</text>
+          <text :class="['tab-item', chartType === 'weight' ? 'tab-active' : '']" @click="changeChartType('weight')">体重</text>
+          <text :class="['tab-item', chartType === 'temperature' ? 'tab-active' : '']" @click="changeChartType('temperature')">体温</text>
         </view>
       </view>
-      <view class="chart-container" id="chart-container">
-        <view :prop="chartOption" :change:prop="echarts.updateChart" id="echarts-dom" class="echarts-dom"></view>
+      <view class="chart-container">
+        <view v-show="statistics.dates.length > 0" id="healthChart" class="chart-canvas"></view>
+        <view v-if="statistics.dates.length === 0" class="chart-empty">
+          <text class="empty-chart-icon">📊</text>
+          <text class="empty-chart-text">暂无数据</text>
+        </view>
       </view>
     </view>
 
@@ -38,21 +55,74 @@
     <view class="reminder-card">
       <view class="card-header">
         <text class="card-title">今日待办</text>
-        <text class="reminder-count">{{ reminders.length }}项</text>
+        <view class="reminder-header-right">
+          <text class="reminder-count">{{ reminders.length }}项</text>
+          <view class="add-reminder-btn" @click="openAddReminder">
+            <text class="add-reminder-icon">+</text>
+          </view>
+        </view>
       </view>
       <view v-if="reminders.length === 0" class="empty-tip">
         <text class="empty-text">今天没有待办事项~</text>
+        <text class="empty-sub" @click="openAddReminder">点击 + 添加待办</text>
       </view>
       <view v-else class="reminder-list">
-        <view v-for="item in reminders" :key="item.id" :class="['reminder-item', item.expired ? 'reminder-expired' : '']">
-          <view :class="['reminder-dot', getCareTypeColor(item.careTypeName)]"></view>
-          <view class="reminder-content">
+        <view v-for="item in reminders" :key="item.id" :class="['reminder-item', item.expired ? 'reminder-expired' : '', item.completed ? 'reminder-completed' : '']">
+          <view class="reminder-check" @click="toggleComplete(item)">
+            <text :class="['check-circle', item.completed ? 'check-circle-done' : '']">{{ item.completed ? '✓' : '' }}</text>
+          </view>
+          <view class="reminder-content" @click="openEditReminder(item)">
             <text class="reminder-title">{{ item.title }}</text>
             <text class="reminder-date">{{ formatReminderDate(item) }}</text>
           </view>
           <view v-if="item.expired" class="expired-tag">
             <text class="expired-text">已过期</text>
           </view>
+          <view class="reminder-delete" @click.stop="deleteItem(item)">
+            <text class="delete-icon">×</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 新增/编辑待办弹窗 -->
+    <view v-if="showReminderModal" class="modal-mask" @click="showReminderModal = false">
+      <view class="modal-content" @click.stop>
+        <view class="modal-header">
+          <text class="modal-title">{{ editingId ? '编辑待办' : '新增待办' }}</text>
+          <text class="modal-close" @click="showReminderModal = false">✕</text>
+        </view>
+        <view class="form-group">
+          <text class="form-label">待办内容</text>
+          <input class="form-input" v-model="reminderForm.title" type="text" placeholder="如：今天该喂驱虫药" maxlength="50" />
+        </view>
+        <view class="form-group">
+          <text class="form-label">护理类型</text>
+          <view class="type-selector">
+            <view
+              v-for="t in careTypes"
+              :key="t.value"
+              :class="['type-item', reminderForm.careType === t.value ? 'type-selected' : '']"
+              @click="reminderForm.careType = t.value"
+            >
+              <text class="type-emoji">{{ t.emoji }}</text>
+              <text :class="['type-name', reminderForm.careType === t.value ? 'type-name-selected' : '']">{{ t.label }}</text>
+            </view>
+          </view>
+        </view>
+        <view class="form-group">
+          <text class="form-label">提醒日期</text>
+          <picker mode="date" :value="reminderForm.reminderDate" @change="onDateChange">
+            <view class="form-picker">
+              <text :class="['picker-text', reminderForm.reminderDate ? '' : 'picker-placeholder']">
+                {{ reminderForm.reminderDate || '请选择日期' }}
+              </text>
+              <text class="picker-arrow">></text>
+            </view>
+          </picker>
+        </view>
+        <view class="form-btn" @click="submitReminder">
+          <text class="btn-text">{{ editingId ? '保存修改' : '添加待办' }}</text>
         </view>
       </view>
     </view>
@@ -60,52 +130,42 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { getMonthlyStatistics, getTodayReminders } from '../../utils/api.js'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { getMonthlyStatistics, getTodayReminders, getPetList, addReminder, updateReminder, completeReminder, deleteReminder } from '../../utils/api.js'
+import { petStore, setCurrentPet } from '../../utils/petStore.js'
 
-const petInfo = ref({ name: '小橘', breed: '橘猫', birthDate: '2023-03-15', species: '猫' })
+const petList = ref([])
+const currentPetId = computed(() => petStore.currentPetId)
+const petInfo = computed(() => petStore.currentPet)
 const chartType = ref('weight')
 const reminders = ref([])
 const statistics = ref({ dates: [], weights: [], temperatures: [], avgWeight: 0, weightVolatility: 0, abnormalCount: 0 })
+let myChart = null
 
-const petId = 1
+const careTypes = [
+  { value: 'FEEDING', label: '喂食', emoji: '🍚' },
+  { value: 'BATH', label: '洗澡', emoji: '🛁' },
+  { value: 'VACCINE', label: '疫苗', emoji: '💉' },
+  { value: 'DEWORMING', label: '驱虫', emoji: '💊' }
+]
 
 const petAge = computed(() => {
   if (!petInfo.value.birthDate) return ''
   const birth = new Date(petInfo.value.birthDate)
   const now = new Date()
   const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth())
-  if (months < 12) return `${months}个月`
-  return `${Math.floor(months / 12)}岁${months % 12 ? months % 12 + '个月' : ''}`
+  if (months < 12) return months + '个月'
+  return Math.floor(months / 12) + '岁' + (months % 12 ? months % 12 + '个月' : '')
 })
 
-const chartOption = computed(() => {
-  if (chartType.value === 'weight') {
-    return {
-      tooltip: { trigger: 'axis' },
-      grid: { left: 40, right: 20, top: 20, bottom: 30 },
-      xAxis: { type: 'category', data: statistics.value.dates, axisLabel: { fontSize: 10, color: '#999' } },
-      yAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
-      series: [{ data: statistics.value.weights, type: 'line', smooth: true, symbol: 'circle', symbolSize: 6, lineStyle: { color: '#FF6B6B', width: 2 }, itemStyle: { color: '#FF6B6B' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(255,107,107,0.3)' }, { offset: 1, color: 'rgba(255,107,107,0.02)' }] } } }]
-    }
-  } else {
-    return {
-      tooltip: { trigger: 'axis' },
-      grid: { left: 40, right: 20, top: 20, bottom: 30 },
-      xAxis: { type: 'category', data: statistics.value.dates, axisLabel: { fontSize: 10, color: '#999' } },
-      yAxis: { type: 'value', axisLabel: { fontSize: 10, color: '#999' }, splitLine: { lineStyle: { color: '#f0f0f0' } } },
-      series: [{ data: statistics.value.temperatures, type: 'line', smooth: true, symbol: 'circle', symbolSize: 6, lineStyle: { color: '#4ECDC4', width: 2 }, itemStyle: { color: '#4ECDC4' }, areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(78,205,196,0.3)' }, { offset: 1, color: 'rgba(78,205,196,0.02)' }] } } }]
-    }
-  }
-})
-
-const getCareTypeColor = (type) => {
-  const map = { FEEDING: 'dot-green', BATH: 'dot-blue', VACCINE: 'dot-orange', DEWORMING: 'dot-purple' }
-  return map[type] || 'dot-green'
+const getSpeciesEmoji = (species) => {
+  const map = { '猫': '🐱', '狗': '🐶', '兔': '🐰', '鸟': '🐦', '鱼': '🐟', '其他': '🐾' }
+  return map[species] || '🐾'
 }
 
 const formatReminderDate = (item) => {
   if (item.expired) return '已过期'
+  if (item.completed) return '已完成'
   const today = new Date()
   const date = new Date(item.reminderDate)
   if (date.toDateString() === today.toDateString()) return '今天'
@@ -115,11 +175,126 @@ const formatReminderDate = (item) => {
   return item.reminderDate
 }
 
+const waitForECharts = () => {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && window.echarts) {
+      resolve()
+      return
+    }
+    let attempts = 0
+    const check = setInterval(() => {
+      attempts++
+      if (typeof window !== 'undefined' && window.echarts) {
+        clearInterval(check)
+        resolve()
+      } else if (attempts > 50) {
+        clearInterval(check)
+        const script = document.createElement('script')
+        script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'
+        script.onload = () => resolve()
+        script.onerror = () => resolve()
+        document.head.appendChild(script)
+      }
+    }, 100)
+  })
+}
+
+const renderChart = async () => {
+  if (statistics.value.dates.length === 0) return
+  
+  await waitForECharts()
+  
+  nextTick(() => {
+    const dom = document.getElementById('healthChart')
+    if (!dom) return
+    if (!myChart) {
+      myChart = window.echarts.init(dom)
+    }
+    const data = chartType.value === 'weight' ? statistics.value.weights : statistics.value.temperatures
+    const color = chartType.value === 'weight' ? '#FF6B6B' : '#4ECDC4'
+    const areaColor = chartType.value === 'weight' ? 'rgba(255,107,107,0.2)' : 'rgba(78,205,196,0.2)'
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params) => {
+          const val = params[0].value
+          const unit = chartType.value === 'weight' ? 'kg' : '℃'
+          return params[0].axisValue + '<br/>' + (val !== null ? val.toFixed(2) : '-') + unit
+        }
+      },
+      grid: { left: 40, right: 20, top: 20, bottom: 30 },
+      xAxis: {
+        type: 'category',
+        data: statistics.value.dates,
+        axisLabel: { fontSize: 10, color: '#999', interval: 'auto' },
+        axisLine: { lineStyle: { color: '#eee' } },
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { fontSize: 10, color: '#999', formatter: (v) => v.toFixed(1) },
+        splitLine: { lineStyle: { color: '#f0f0f0' } }
+      },
+      series: [{
+        data: data,
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { color: color, width: 2 },
+        itemStyle: { color: color },
+        areaStyle: { color: areaColor },
+        markLine: {
+          silent: true,
+          data: [{ type: 'average', name: '均值' }],
+          lineStyle: { color: '#4ECDC4', type: 'dashed', width: 2 },
+          label: { fontSize: 10, color: '#4ECDC4', formatter: (p) => '均值 ' + Number(p.value).toFixed(2) }
+        }
+      }]
+    }
+    myChart.setOption(option, true)
+  })
+}
+
+const changeChartType = (type) => {
+  chartType.value = type
+  renderChart()
+}
+
+watch(statistics, () => {
+  renderChart()
+}, { deep: true })
+
+watch(chartType, () => {
+  renderChart()
+})
+
+const switchPet = (pet) => {
+  setCurrentPet(pet)
+  loadData()
+}
+
+const loadPetList = async () => {
+  try {
+    const list = await getPetList()
+    petList.value = list || []
+    if (petList.value.length > 0 && !petStore.currentPetId) {
+      setCurrentPet(petList.value[0])
+      loadData()
+    } else if (petStore.currentPetId) {
+      loadData()
+    }
+  } catch (e) {
+    console.error('加载宠物列表失败', e)
+  }
+}
+
 const loadData = async () => {
+  if (!petStore.currentPetId) return
   try {
     const [statsData, reminderData] = await Promise.all([
-      getMonthlyStatistics(petId),
-      getTodayReminders(petId)
+      getMonthlyStatistics(petStore.currentPetId),
+      getTodayReminders(petStore.currentPetId)
     ])
     statistics.value = statsData || statistics.value
     reminders.value = reminderData || []
@@ -129,43 +304,122 @@ const loadData = async () => {
 }
 
 const goAddPet = () => {
-  uni.navigateTo({ url: '/pages/pet-add/index' })
+  uni.navigateTo({
+    url: '/pages/pet-add/index',
+    events: {
+      petAdded: () => {
+        loadPetList()
+      }
+    }
+  })
 }
 
-onMounted(() => {
-  loadData()
-})
-</script>
+const openAddReminder = () => {
+  editingId.value = null
+  reminderForm.value = {
+    title: '',
+    careType: 'FEEDING',
+    reminderDate: new Date().toISOString().slice(0, 10)
+  }
+  showReminderModal.value = true
+}
 
-<script module="echarts" lang="renderjs">
-let myChart = null
-export default {
-  mounted() {
-    if (typeof window !== 'undefined' && typeof echarts === 'undefined') {
-      const script = document.createElement('script')
-      script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'
-      script.onload = () => {
-        this.initChart()
-      }
-      document.head.appendChild(script)
-    } else if (typeof echarts !== 'undefined') {
-      this.initChart()
+const editingId = ref(null)
+const showReminderModal = ref(false)
+const reminderForm = ref({
+  title: '',
+  careType: 'FEEDING',
+  reminderDate: ''
+})
+
+const openEditReminder = (item) => {
+  editingId.value = item.id
+  reminderForm.value = {
+    title: item.title,
+    careType: item.careTypeName || 'FEEDING',
+    reminderDate: item.reminderDate
+  }
+  showReminderModal.value = true
+}
+
+const onDateChange = (e) => {
+  reminderForm.value.reminderDate = e.detail.value
+}
+
+const submitReminder = async () => {
+  if (!reminderForm.value.title) {
+    uni.showToast({ title: '请输入待办内容', icon: 'none' })
+    return
+  }
+  try {
+    if (editingId.value) {
+      await updateReminder(editingId.value, {
+        title: reminderForm.value.title,
+        careType: reminderForm.value.careType,
+        reminderDate: reminderForm.value.reminderDate
+      })
+      uni.showToast({ title: '修改成功', icon: 'success' })
+    } else {
+      await addReminder({
+        petId: petStore.currentPetId,
+        title: reminderForm.value.title,
+        careType: reminderForm.value.careType,
+        reminderDate: reminderForm.value.reminderDate,
+        completed: false,
+        expired: false
+      })
+      uni.showToast({ title: '添加成功', icon: 'success' })
     }
-  },
-  methods: {
-    initChart() {
-      const dom = document.getElementById('echarts-dom')
-      if (dom) {
-        myChart = echarts.init(dom)
-      }
-    },
-    updateChart(newValue) {
-      if (myChart && newValue) {
-        myChart.setOption(newValue, true)
-      }
-    }
+    showReminderModal.value = false
+    loadData()
+  } catch (e) {
+    uni.showToast({ title: e || '操作失败', icon: 'none' })
   }
 }
+
+const toggleComplete = async (item) => {
+  try {
+    await completeReminder(item.id)
+    uni.showToast({ title: item.completed ? '已取消完成' : '已完成', icon: 'success' })
+    loadData()
+  } catch (e) {
+    uni.showToast({ title: e || '操作失败', icon: 'none' })
+  }
+}
+
+const deleteItem = (item) => {
+  uni.showModal({
+    title: '提示',
+    content: '确定删除该待办吗？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          await deleteReminder(item.id)
+          uni.showToast({ title: '已删除', icon: 'success' })
+          loadData()
+        } catch (e) {
+          uni.showToast({ title: e || '删除失败', icon: 'none' })
+        }
+      }
+    }
+  })
+}
+
+onMounted(async () => {
+  await waitForECharts()
+  loadPetList()
+  uni.$on('petAdded', () => {
+    loadPetList()
+  })
+})
+
+onUnmounted(() => {
+  uni.$off('petAdded')
+  if (myChart) {
+    myChart.dispose()
+    myChart = null
+  }
+})
 </script>
 
 <style scoped>
@@ -174,6 +428,56 @@ export default {
   background-color: #f5f6fa;
   min-height: 100vh;
 }
+
+.pet-switcher {
+  white-space: nowrap;
+  margin-bottom: 20rpx;
+}
+.switcher-list {
+  display: inline-flex;
+  gap: 16rpx;
+  padding: 4rpx 0;
+}
+.pet-chip {
+  display: inline-flex;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 32rpx;
+  padding: 12rpx 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.04);
+  flex-shrink: 0;
+}
+.pet-chip-active {
+  background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+  box-shadow: 0 4rpx 12rpx rgba(255,107,107,0.3);
+}
+.pet-chip-add {
+  background: #ffffff;
+  border: 2rpx dashed #FF6B6B;
+}
+.chip-emoji {
+  font-size: 28rpx;
+  margin-right: 8rpx;
+}
+.chip-name {
+  font-size: 26rpx;
+  color: #666;
+}
+.chip-name-active {
+  color: #ffffff;
+  font-weight: bold;
+}
+.chip-add-icon {
+  font-size: 32rpx;
+  color: #FF6B6B;
+  margin-right: 6rpx;
+  font-weight: 300;
+}
+.chip-add-text {
+  font-size: 24rpx;
+  color: #FF6B6B;
+}
+
 .pet-card {
   display: flex;
   align-items: center;
@@ -220,21 +524,7 @@ export default {
   font-size: 22rpx;
   color: #ffffff;
 }
-.add-pet-btn {
-  width: 56rpx;
-  height: 56rpx;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-left: 16rpx;
-}
-.add-pet-icon {
-  font-size: 40rpx;
-  color: #ffffff;
-  font-weight: 300;
-}
+
 .chart-card, .reminder-card {
   background: #ffffff;
   border-radius: 24rpx;
@@ -272,17 +562,55 @@ export default {
   box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.08);
 }
 .chart-container {
+  position: relative;
   width: 100%;
   height: 400rpx;
 }
-.echarts-dom {
+.chart-canvas {
   width: 100%;
   height: 400rpx;
+}
+.chart-empty {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.empty-chart-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}
+.empty-chart-text {
+  font-size: 26rpx;
+  color: #cccccc;
+}
+
+.reminder-header-right {
+  display: flex;
+  align-items: center;
 }
 .reminder-count {
   font-size: 24rpx;
   color: #FF6B6B;
   font-weight: bold;
+  margin-right: 16rpx;
+}
+.add-reminder-btn {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  background: #FF6B6B;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2rpx 8rpx rgba(255,107,107,0.3);
+}
+.add-reminder-icon {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: 300;
 }
 .empty-tip {
   padding: 40rpx 0;
@@ -291,6 +619,13 @@ export default {
 .empty-text {
   color: #cccccc;
   font-size: 28rpx;
+  display: block;
+}
+.empty-sub {
+  color: #FF6B6B;
+  font-size: 24rpx;
+  display: block;
+  margin-top: 12rpx;
 }
 .reminder-list {
   display: flex;
@@ -305,17 +640,27 @@ export default {
 .reminder-item:last-child {
   border-bottom: none;
 }
-.reminder-dot {
-  width: 16rpx;
-  height: 16rpx;
-  border-radius: 50%;
-  margin-right: 20rpx;
+.reminder-check {
+  width: 40rpx;
+  height: 40rpx;
+  margin-right: 16rpx;
   flex-shrink: 0;
 }
-.dot-green { background: #4ECDC4; }
-.dot-blue { background: #5B8FF9; }
-.dot-orange { background: #FF9F43; }
-.dot-purple { background: #A855F7; }
+.check-circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40rpx;
+  height: 40rpx;
+  border: 2rpx solid #ddd;
+  border-radius: 50%;
+  font-size: 24rpx;
+  color: #ffffff;
+}
+.check-circle-done {
+  background: #4ECDC4;
+  border-color: #4ECDC4;
+}
 .reminder-content {
   flex: 1;
 }
@@ -333,13 +678,142 @@ export default {
 .reminder-expired {
   opacity: 0.6;
 }
+.reminder-completed .reminder-title {
+  text-decoration: line-through;
+  color: #999;
+}
 .expired-tag {
   background: #FFF0F0;
   border-radius: 8rpx;
   padding: 4rpx 12rpx;
+  margin-right: 12rpx;
 }
 .expired-text {
   font-size: 22rpx;
   color: #FF6B6B;
+}
+.reminder-delete {
+  width: 40rpx;
+  height: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.delete-icon {
+  font-size: 32rpx;
+  color: #cccccc;
+}
+
+.modal-mask {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+}
+.modal-content {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 32rpx 32rpx 0 0;
+  padding: 40rpx;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32rpx;
+}
+.modal-title {
+  font-size: 34rpx;
+  font-weight: bold;
+  color: #333;
+}
+.modal-close {
+  font-size: 36rpx;
+  color: #999;
+  padding: 8rpx;
+}
+.form-group {
+  margin-bottom: 28rpx;
+}
+.form-label {
+  font-size: 26rpx;
+  color: #666;
+  margin-bottom: 12rpx;
+  display: block;
+}
+.form-input {
+  width: 100%;
+  height: 80rpx;
+  border: 2rpx solid #e8e8e8;
+  border-radius: 12rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+.type-selector {
+  display: flex;
+  gap: 16rpx;
+}
+.type-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16rpx 0;
+  border: 2rpx solid #e8e8e8;
+  border-radius: 16rpx;
+}
+.type-selected {
+  border-color: #FF6B6B;
+  background: #FFF5F5;
+}
+.type-emoji {
+  font-size: 36rpx;
+  margin-bottom: 4rpx;
+}
+.type-name {
+  font-size: 22rpx;
+  color: #999;
+}
+.type-name-selected {
+  color: #FF6B6B;
+  font-weight: bold;
+}
+.form-picker {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 80rpx;
+  border: 2rpx solid #e8e8e8;
+  border-radius: 12rpx;
+  padding: 0 20rpx;
+}
+.picker-text {
+  font-size: 28rpx;
+  color: #333;
+}
+.picker-placeholder {
+  color: #cccccc;
+}
+.picker-arrow {
+  font-size: 28rpx;
+  color: #cccccc;
+}
+.form-btn {
+  background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
+  border-radius: 16rpx;
+  padding: 24rpx 0;
+  text-align: center;
+  margin-top: 20rpx;
+}
+.btn-text {
+  font-size: 32rpx;
+  color: #ffffff;
+  font-weight: bold;
 }
 </style>

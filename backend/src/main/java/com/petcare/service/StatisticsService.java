@@ -69,9 +69,7 @@ public class StatisticsService {
         int totalRecords = records.size();
 
         // 此处的 petId 是方法参数，本身就是 effectively final，无需修改
-        List<Reminder> vaccineReminders = reminderRepository.findAll().stream()
-                .filter(r -> r.getPet().getId().equals(petId) && r.getCareType() == CareType.VACCINE)
-                .collect(Collectors.toList());
+        List<Reminder> vaccineReminders = reminderRepository.findByPetIdAndCareType(petId, CareType.VACCINE);
 
         long totalVaccine = vaccineReminders.size();
         long completedVaccine = vaccineReminders.stream().filter(r -> Boolean.TRUE.equals(r.getCompleted())).count();

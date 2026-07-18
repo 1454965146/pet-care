@@ -21,9 +21,16 @@ const request = (options) => {
 }
 
 export const addHealthRecord = (data) => request({ url: '/health-record', method: 'POST', data })
-export const getMonthlyStatistics = (petId) => request({ url: '/statistics/monthly', data: { petId } })
-export const getTodayReminders = (petId) => request({ url: '/reminders/today', data: { petId } })
-export const getHealthRecords = (petId, careType) => request({ url: '/health-records', data: { petId, careType } })
+export const getMonthlyStatistics = (petId) => request({ url: '/statistics/monthly?petId=' + petId })
+export const getTodayReminders = (petId) => request({ url: '/reminders/today?petId=' + petId })
+export const getHealthRecords = (petId, careType) => {
+  let url = '/health-records?petId=' + petId
+  if (careType) url += '&careType=' + careType
+  return request({ url })
+}
 export const getPetList = () => request({ url: '/list' })
 export const addPet = (data) => request({ url: '/add', method: 'POST', data })
 export const addReminder = (data) => request({ url: '/reminder/add', method: 'POST', data })
+export const completeReminder = (id) => request({ url: '/reminder/complete/' + id, method: 'PUT' })
+export const updateReminder = (id, data) => request({ url: '/reminder/update/' + id, method: 'PUT', data })
+export const deleteReminder = (id) => request({ url: '/reminder/' + id, method: 'DELETE' })

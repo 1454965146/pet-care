@@ -61,8 +61,12 @@
         <text class="section-title">体重变化趋势</text>
         <text class="chart-tip">含平均标线</text>
       </view>
-      <view class="chart-wrap" id="chart-wrap">
-        <view :prop="chartOption" :change:prop="echarts.updateChart" id="report-echarts" class="report-echarts"></view>
+      <view class="chart-wrap">
+        <view v-show="statistics.dates.length > 0" id="reportChart" class="report-chart"></view>
+        <view v-if="statistics.dates.length === 0" class="chart-empty">
+          <text class="empty-chart-icon">📊</text>
+          <text class="empty-chart-text">暂无数据</text>
+        </view>
       </view>
     </view>
 
@@ -109,15 +113,17 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { getMonthlyStatistics } from '../../utils/api.js'
+import { petStore } from '../../utils/petStore.js'
 
-const petId = 1
 const statistics = ref({
   dates: [], weights: [], temperatures: [],
   avgWeight: 0, weightVolatility: 0, abnormalCount: 0,
   totalRecords: 0, vaccineCompletionRate: 100
 })
+let myChart = null
+let isChartReady = false
 
 const reportPeriod = computed(() => {
   const now = new Date()
@@ -126,13 +132,11 @@ const reportPeriod = computed(() => {
   return fmt(start) + ' - ' + fmt(now)
 })
 
-// 保留两位小数
 const formatNumber = (val) => {
   if (val === null || val === undefined) return '--'
   return Number(val).toFixed(2)
 }
 
-// 健康指数：综合评分
 const healthScore = computed(() => {
   let score = 100
   if (statistics.value.weightVolatility > 10) score -= 15
@@ -143,96 +147,132 @@ const healthScore = computed(() => {
   return Math.max(score, 0)
 })
 
-const chartOption = computed(() => {
-  return {
-    tooltip: {
-      trigger: 'axis',
-      formatter: function(params) {
-        const p = params[0]
-        return p.axisValue + '<br/>体重: ' + (p.value ? Number(p.value).toFixed(2) : '--') + ' kg'
+const waitForECharts = () => {
+  return new Promise((resolve) => {
+    if (typeof window !== 'undefined' && window.echarts) {
+      resolve()
+      return
+    }
+    let attempts = 0
+    const check = setInterval(() => {
+      attempts++
+      if (typeof window !== 'undefined' && window.echarts) {
+        clearInterval(check)
+        resolve()
+      } else if (attempts > 50) {
+        clearInterval(check)
+        const script = document.createElement('script')
+        script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'
+        script.onload = () => resolve()
+        script.onerror = () => resolve()
+        document.head.appendChild(script)
       }
-    },
-    grid: { left: 50, right: 20, top: 30, bottom: 35 },
-    xAxis: {
-      type: 'category',
-      data: statistics.value.dates,
-      axisLabel: { fontSize: 10, color: '#999', interval: 4, rotate: 0 },
-      axisLine: { lineStyle: { color: '#e8e8e8' } },
-      axisTick: { show: false }
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { fontSize: 10, color: '#999', formatter: function(v) { return v.toFixed(1) } },
-      splitLine: { lineStyle: { color: '#f5f5f5', type: 'dashed' } }
-    },
-    series: [{
-      data: statistics.value.weights,
-      type: 'line',
-      smooth: true,
-      symbol: 'circle',
-      symbolSize: 7,
-      lineStyle: { color: '#FF6B6B', width: 3 },
-      itemStyle: { color: '#FF6B6B', borderWidth: 2, borderColor: '#fff' },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(255,107,107,0.25)' },
-            { offset: 1, color: 'rgba(255,107,107,0.02)' }
-          ]
+    }, 100)
+  })
+}
+
+const renderChart = async () => {
+  if (statistics.value.dates.length === 0) return
+  
+  await waitForECharts()
+  
+  nextTick(() => {
+    const dom = document.getElementById('reportChart')
+    if (!dom) return
+    
+    if (!myChart) {
+      myChart = window.echarts.init(dom)
+      isChartReady = true
+    }
+    
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params) => {
+          const p = params[0]
+          return p.axisValue + '<br/>体重: ' + (p.value ? Number(p.value).toFixed(2) : '--') + ' kg'
         }
       },
-      markLine: {
-        silent: true,
-        data: [{ type: 'average', name: '平均值' }],
-        lineStyle: { color: '#4ECDC4', type: 'dashed', width: 2 },
-        label: {
-          fontSize: 10,
-          color: '#4ECDC4',
-          formatter: function(params) { return '均值 ' + Number(params.value).toFixed(2) }
+      grid: { left: 50, right: 20, top: 30, bottom: 35 },
+      xAxis: {
+        type: 'category',
+        data: statistics.value.dates,
+        axisLabel: { fontSize: 10, color: '#999', interval: 4, rotate: 0 },
+        axisLine: { lineStyle: { color: '#e8e8e8' } },
+        axisTick: { show: false }
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { fontSize: 10, color: '#999', formatter: (v) => v.toFixed(1) },
+        splitLine: { lineStyle: { color: '#f5f5f5', type: 'dashed' } }
+      },
+      series: [{
+        data: statistics.value.weights,
+        type: 'line',
+        smooth: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { color: '#FF6B6B', width: 2 },
+        itemStyle: { color: '#FF6B6B', borderWidth: 2, borderColor: '#fff' },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(255,107,107,0.2)' },
+              { offset: 1, color: 'rgba(255,107,107,0.02)' }
+            ]
+          }
+        },
+        markLine: {
+          silent: true,
+          data: [{ type: 'average', name: '平均值' }],
+          lineStyle: { color: '#4ECDC4', type: 'dashed', width: 2 },
+          label: {
+            fontSize: 10,
+            color: '#4ECDC4',
+            formatter: (p) => '均值 ' + Number(p.value).toFixed(2)
+          }
         }
-      }
-    }]
+      }]
+    }
+    
+    myChart.setOption(option, true)
+  })
+}
+
+watch(statistics, () => {
+  if (statistics.value.dates.length > 0) {
+    renderChart()
   }
-})
+}, { deep: true })
 
 const loadData = async () => {
+  if (!petStore.currentPetId) return
   try {
-    const data = await getMonthlyStatistics(petId)
+    const data = await getMonthlyStatistics(petStore.currentPetId)
     if (data) statistics.value = data
   } catch (e) {
     console.error('加载统计数据失败', e)
   }
 }
 
-onMounted(() => {
+const onPetChanged = () => {
   loadData()
-})
-</script>
-
-<script module="echarts" lang="renderjs">
-let myChart = null
-export default {
-  mounted() {
-    if (typeof window !== 'undefined' && typeof echarts === 'undefined') {
-      const script = document.createElement('script')
-      script.src = 'https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js'
-      script.onload = () => { this.initChart() }
-      document.head.appendChild(script)
-    } else if (typeof echarts !== 'undefined') {
-      this.initChart()
-    }
-  },
-  methods: {
-    initChart() {
-      const dom = document.getElementById('report-echarts')
-      if (dom) myChart = echarts.init(dom)
-    },
-    updateChart(newValue) {
-      if (myChart && newValue) myChart.setOption(newValue, true)
-    }
-  }
 }
+
+onMounted(async () => {
+  await waitForECharts()
+  loadData()
+  uni.$on('petChanged', onPetChanged)
+})
+
+onUnmounted(() => {
+  uni.$off('petChanged', onPetChanged)
+  if (myChart) {
+    myChart.dispose()
+    myChart = null
+  }
+})
 </script>
 
 <style scoped>
@@ -242,7 +282,6 @@ export default {
   min-height: 100vh;
 }
 
-/* 报告头部 */
 .report-header {
   background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
   border-radius: 24rpx;
@@ -304,7 +343,6 @@ export default {
   color: rgba(255,255,255,0.9);
 }
 
-/* 统计卡片 */
 .stats-grid {
   display: flex;
   flex-wrap: wrap;
@@ -361,7 +399,6 @@ export default {
   margin-top: 8rpx;
 }
 
-/* 图表卡片 */
 .chart-card, .assess-card, .summary-card {
   background: #ffffff;
   border-radius: 20rpx;
@@ -388,15 +425,31 @@ export default {
   border-radius: 8rpx;
 }
 .chart-wrap {
+  position: relative;
   width: 100%;
   height: 420rpx;
 }
-.report-echarts {
+.report-chart {
   width: 100%;
   height: 420rpx;
+}
+.chart-empty {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.empty-chart-icon {
+  font-size: 48rpx;
+  margin-bottom: 12rpx;
+}
+.empty-chart-text {
+  font-size: 26rpx;
+  color: #cccccc;
 }
 
-/* 健康评估 */
 .assess-items {
   display: flex;
   flex-direction: column;
@@ -426,7 +479,6 @@ export default {
 .text-ok { color: #4ECDC4; }
 .text-warn { color: #FF9F43; }
 
-/* 汇总卡片 */
 .summary-card {
   background: linear-gradient(135deg, #FF6B6B, #FF8E8E);
   display: flex;

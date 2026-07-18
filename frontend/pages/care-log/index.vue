@@ -100,10 +100,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { addHealthRecord } from '../../utils/api.js'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { addHealthRecord, getHealthRecords } from '../../utils/api.js'
+import { petStore } from '../../utils/petStore.js'
 
-const petId = 1
 const activeFilter = ref('')
 const records = ref([])
 const showAddModal = ref(false)
@@ -164,9 +164,13 @@ const getMentalLabel = (state) => {
 }
 
 const submitRecord = async () => {
+  if (!petStore.currentPetId) {
+    uni.showToast({ title: '请先选择宠物', icon: 'none' })
+    return
+  }
   try {
     const data = {
-      petId,
+      petId: petStore.currentPetId,
       careType: formData.value.careType,
       weight: formData.value.weight ? parseFloat(formData.value.weight) : null,
       temperature: formData.value.temperature ? parseFloat(formData.value.temperature) : null,
@@ -185,21 +189,27 @@ const submitRecord = async () => {
 }
 
 const loadRecords = async () => {
+  if (!petStore.currentPetId) return
   try {
-    const res = await uni.request({
-      url: 'http://localhost:8080/api/pet/health-records',
-      data: { petId }
-    })
-    if (res.statusCode === 200 && res.data.code === 200) {
-      records.value = res.data.data || []
-    }
+    const res = await getHealthRecords(petStore.currentPetId)
+    records.value = res || []
   } catch (e) {
     console.error('加载记录失败', e)
   }
 }
 
+// 监听宠物切换
+const onPetChanged = () => {
+  loadRecords()
+}
+
 onMounted(() => {
   loadRecords()
+  uni.$on('petChanged', onPetChanged)
+})
+
+onUnmounted(() => {
+  uni.$off('petChanged', onPetChanged)
 })
 </script>
 

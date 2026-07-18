@@ -14,4 +14,8 @@ public interface ReminderRepository extends JpaRepository<Reminder, Long> {
 
     List<Reminder> findByCompletedFalseAndReminderDateBefore(LocalDate date);
 
+    List<Reminder> findByPetIdAndCareType(Long petId, com.petcare.enums.CareType careType);
+
+    void deleteByPetIsNull();
+
 }

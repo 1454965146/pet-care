@@ -117,6 +117,8 @@ const submitForm = async () => {
   try {
     await addPet(formData.value)
     uni.showToast({ title: '添加成功', icon: 'success' })
+    // 通知首页刷新宠物列表
+    uni.$emit('petAdded')
     setTimeout(() => {
       uni.navigateBack()
     }, 1500)
