@@ -43,6 +43,7 @@ public class ReminderService {
         return result;
     }
 
+    
     private ReminderResponse toResponse(Reminder reminder) {
         ReminderResponse response = new ReminderResponse();
         response.setId(reminder.getId());

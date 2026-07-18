@@ -23,7 +23,7 @@ public class HealthRecordService {
         this.petRepository = petRepository;
     }
 
-    
+
     public HealthRecordResponse addHealthRecord(HealthRecordRequest request) {
         if (request.getWeight() != null && (request.getWeight() < 0 || request.getWeight() > 100)) {
             throw new RuntimeException("体重数据异常");
