@@ -51,7 +51,7 @@ public class StatisticsService {
         Double avgWeight = null;
         Double weightVolatility = 0.0;
 
-        
+
         if (!validWeights.isEmpty()) {
             avgWeight = validWeights.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
             if (avgWeight == 0.0) {

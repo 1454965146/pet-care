@@ -54,6 +54,7 @@
         <text class="stat-label">疫苗完成率</text>
       </view>
     </view>
+	
 
     <!-- 体重趋势图 -->
     <view class="chart-card">
